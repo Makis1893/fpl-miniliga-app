@@ -22,7 +22,7 @@ def fetch_team_history(entry_id):
     response = requests.get(url)
     return response.json().get('current', [])
 
-tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 30 bodových výkonů", "🏆 Pořadí miniligy"])
+tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 30 bodových výkonů", "🏆 Pořadí miniligy", "📉 Vývoj pořadí"])
 
 with tabs[0]:
     if st.button("Zobrazit vývoj bodů", key="button_vyvoj"):
@@ -125,3 +125,20 @@ with tabs[2]:
             df_rank.index += 1
             st.subheader("🏆 Aktuální pořadí miniligy")
             st.table(df_rank)
+
+with tabs[3]:
+    if st.button("Zobrazit vývoj pořadí", key="button_vyvoj_poradi"):
+        entries = fetch_league_data(league_id)
+        df_rankings = pd.DataFrame()
+        max_rounds = 38
+
+        for entry_id, name in entries:
+            try:
+                history = fetch_team_history(entry_id)
+                ranks = [gw['overall_rank'] for gw in history]
+                # doplnit chybějící kola stejným posledním pořadím
+                if len(ranks) < max_rounds:
+                    ranks += [ranks[-1]] * (max_rounds - len(ranks))
+                df_rankings[name] = ranks
+            except Exception as e:
+                st.warning(f"Chyba při načítání dat p
