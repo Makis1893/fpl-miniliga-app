@@ -20,7 +20,6 @@ def fetch_league_data(league_id):
 def fetch_team_history(entry_id):
     url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
     response = requests.get(url)
-    # vrací seznam dictů, kde je i event_points (body za kolo)
     return response.json().get('current', [])
 
 tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů", "🏆 Pořadí miniligy"])
@@ -34,10 +33,10 @@ with tabs[0]:
         for entry_id, name in entries:
             try:
                 history = fetch_team_history(entry_id)
-                # body za jednotlivá kola, použijeme total_points (kumulativní)
                 points = [gw['total_points'] for gw in history]
-                # doplníme na 38 kol (pokud chybí, doplní se nula)
-                points += [points[-1]] * (max_rounds - len(points)) if len(points) < max_rounds else []
+                # doplníme poslední známou hodnotou, pokud má méně než 38 kol
+                if len(points) < max_rounds:
+                    points += [points[-1]] * (max_rounds - len(points))
                 df[name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
@@ -92,7 +91,6 @@ with tabs[1]:
                     performances.append({
                         "Tým": name,
                         "Kolo": gw['event'],
-                        # Zde event_points (body za dané kolo), ne total_points
                         "Body": gw.get('event_points', 0)
                     })
             except Exception as e:
@@ -100,9 +98,11 @@ with tabs[1]:
 
         if performances:
             df_perf = pd.DataFrame(performances)
-            top10 = df_perf.sort_values(by="Body", ascending=False).head(10)
+            top10 = df_perf.sort_values(by="Body", ascending=False).head(10).reset_index(drop=True)
+            top10.index += 1
+            top10.index.name = 'Pořadí'
             st.subheader("🔥 Top 10 bodových výkonů v rámci jednoho kola")
-            st.table(top10.reset_index(drop=True))
+            st.table(top10)
 
 with tabs[2]:
     if st.button("Zobrazit aktuální pořadí", key="button_poradi"):
