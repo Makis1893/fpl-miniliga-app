@@ -6,7 +6,15 @@ from requests.exceptions import HTTPError
 
 st.set_page_config(layout="wide", page_title="FPL Miniliga")
 
-league_id = 36264
+# Vstup pro ID miniligy - default 36264
+league_id = st.sidebar.text_input("Zadej ID miniligy:", value="36264")
+
+try:
+    league_id = int(league_id)
+except ValueError:
+    st.error("ID miniligy musí být číslo!")
+    st.stop()
+
 max_rounds = 38
 
 @st.cache_data(ttl=3600)
@@ -26,6 +34,9 @@ def fetch_league_data(league_id):
         page += 1
     return entries
 
+# Globální proměnná pro zobrazení 404 hlášky jen jednou
+not_found_teams = []
+
 def fetch_team_history_safe(entry_id):
     url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/event-history/"
     try:
@@ -35,7 +46,8 @@ def fetch_team_history_safe(entry_id):
         return data['current']
     except HTTPError as http_err:
         if r.status_code == 404:
-            st.warning(f"Tým s ID {entry_id} nemá dostupnou historii (404 Not Found). Přeskočeno.")
+            if entry_id not in not_found_teams:
+                not_found_teams.append(entry_id)
             return None
         else:
             st.error(f"HTTP chyba při načítání dat pro tým {entry_id}: {http_err}")
@@ -70,17 +82,40 @@ def create_hide_show_buttons(num_traces):
 
 st.title("Fantasy Premier League Miniliga")
 
-tabs = st.tabs(["Vývoj bodů týmů", "Top 30 bodových výkonů", "Vývoj pořadí v minilize", "Pořadí v minilize"])
+if not league_id:
+    st.warning("Zadej prosím ID miniligy v levém panelu.")
+    st.stop()
 
-entries = fetch_league_data(league_id)
+# Načtení týmů v minilize
+try:
+    entries = fetch_league_data(league_id)
+except Exception as e:
+    st.error(f"Chyba při načítání dat miniligy: {e}")
+    st.stop()
 
-# --- Zpracování dat pro všechny týmy ---
+if not entries:
+    st.warning("Miniliga nemá žádné týmy nebo je neplatné ID.")
+    st.stop()
+
+# Načtení historie týmů - může chvíli trvat
 team_histories = {}
-for entry_id, name in entries:
-    history = fetch_team_history_safe(entry_id)
-    if history is None:
-        continue
-    team_histories[name] = history
+with st.spinner("Načítám historii týmů..."):
+    for entry_id, name in entries:
+        history = fetch_team_history_safe(entry_id)
+        if history is not None:
+            team_histories[name] = history
+
+# Ukázat jednou upozornění na týmy bez historie
+if not_found_teams:
+    st.warning(f"Týmy s ID {', '.join(map(str, not_found_teams))} nemají dostupnou historii (404 Not Found) a byly přeskočeny.")
+
+# Pokud žádné týmy nemají historii
+if not team_histories:
+    st.error("Žádný tým nemá dostupnou historii, nelze zobrazit data.")
+    st.stop()
+
+# Založky
+tabs = st.tabs(["Vývoj bodů týmů", "Top 30 bodových výkonů", "Vývoj pořadí v minilize", "Pořadí v minilize"])
 
 # --- 1. Vývoj bodů týmů ---
 with tabs[0]:
@@ -130,7 +165,6 @@ with tabs[1]:
 with tabs[2]:
     st.header("Vývoj pořadí týmů v minilize po jednotlivých kolech")
 
-    # Nejprve vytvoříme DataFrame s body po kolech
     df_points_cum = pd.DataFrame()
     for name, history in team_histories.items():
         points = [gw.get('event_points', 0) for gw in history]
@@ -141,7 +175,6 @@ with tabs[2]:
     df_points_cum.index = range(1, max_rounds + 1)
     df_cum_sum = df_points_cum.cumsum()
 
-    # Vypočítat pořadí v rámci miniligy (menší pořadí je lepší)
     order_data = {}
     for round_num in df_cum_sum.index:
         round_points = df_cum_sum.loc[round_num]
@@ -178,21 +211,21 @@ with tabs[2]:
 with tabs[3]:
     st.header("Aktuální pořadí miniligy")
 
-    # Získat aktuální pořadí z API
     url_standings = f"https://fantasy.premierleague.com/api/leagues-classic/{league_id}/standings/"
-    response = requests.get(url_standings)
-    response.raise_for_status()
-    data = response.json()
-
-    standings = data['standings']['results']
-    df_standings = pd.DataFrame(standings)
-    df_standings = df_standings[['rank', 'player_name', 'entry', 'total']]
-    df_standings.rename(columns={
-        'rank': 'Pořadí',
-        'player_name': 'Tým',
-        'entry': 'ID Týmu',
-        'total': 'Body celkem'
-    }, inplace=True)
-    df_standings.set_index('Pořadí', inplace=True)
-
-    st.dataframe(df_standings.style.format({"Body celkem": "{:.0f}"}), use_container_width=True)
+    try:
+        response = requests.get(url_standings)
+        response.raise_for_status()
+        data = response.json()
+        standings = data['standings']['results']
+        df_standings = pd.DataFrame(standings)
+        df_standings = df_standings[['rank', 'player_name', 'entry', 'total']]
+        df_standings.rename(columns={
+            'rank': 'Pořadí',
+            'player_name': 'Tým',
+            'entry': 'ID Týmu',
+            'total': 'Body celkem'
+        }, inplace=True)
+        df_standings.set_index('Pořadí', inplace=True)
+        st.dataframe(df_standings.style.format({"Body celkem": "{:.0f}"}), use_container_width=True)
+    except Exception as e:
+        st.error(f"Chyba při načítání aktuálního pořadí: {e}")
