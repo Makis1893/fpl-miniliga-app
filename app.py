@@ -34,7 +34,6 @@ with tabs[0]:
             try:
                 history = fetch_team_history(entry_id)
                 points = [gw['total_points'] for gw in history]
-                # doplníme poslední známou hodnotou, pokud má méně než 38 kol
                 if len(points) < max_rounds:
                     points += [points[-1]] * (max_rounds - len(points))
                 df[name] = points
@@ -79,6 +78,14 @@ with tabs[0]:
 
             st.plotly_chart(fig, use_container_width=True)
 
+        # Ladící výpis prvního kola prvního týmu – můžeš zakomentovat po ověření
+        if entries:
+            first_entry_id, first_name = entries[0]
+            first_history = fetch_team_history(first_entry_id)
+            if len(first_history) > 0:
+                st.write(f"Ukázka dat pro tým {first_name} (kolo 1):")
+                st.json(first_history[0])
+
 with tabs[1]:
     if st.button("Zobrazit top 10 bodových výkonů", key="button_top10"):
         entries = fetch_league_data(league_id)
@@ -88,10 +95,13 @@ with tabs[1]:
             try:
                 history = fetch_team_history(entry_id)
                 for gw in history:
+                    body = gw.get('event_points')
+                    if not body:
+                        body = gw.get('points', 0)
                     performances.append({
                         "Tým": name,
                         "Kolo": gw['event'],
-                        "Body": gw.get('event_points', 0)
+                        "Body": body
                     })
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
