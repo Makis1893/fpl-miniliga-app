@@ -59,7 +59,6 @@ with tabs[0]:
                 hovertemplate='Kolo %{x}<br>Body celkem: %{y}<br>Tým: '+team+'<extra></extra>'
             ))
 
-        # Tlačítka Hide all / Show all mimo oblast grafu
         fig.update_layout(
             updatemenus=[dict(
                 type="buttons",
@@ -82,28 +81,27 @@ with tabs[0]:
                 showactive=False,
                 x=0,
                 xanchor="left",
-                y=1.15,
+                y=1.25,
                 yanchor="top"
-            )]
-        )
-
-        fig.update_layout(
-            title="Vývoj celkových bodů v minilize (Všechny týmy)",
-            xaxis_title="Kolo",
-            yaxis_title="Celkové body",
-            xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-            yaxis=dict(range=[0, df.values.max()*1.1]),
+            )],
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
-                y=1.1,
+                y=1.2,
                 xanchor="right",
                 x=1,
                 xref="paper",
                 yref="paper",
                 bgcolor="rgba(0,0,0,0)"
             ),
-            margin=dict(l=40, r=40, t=80, b=40),
+            margin=dict(l=40, r=40, t=120, b=40),
+            autosize=False,
+            height=600,
+            title="Vývoj celkových bodů v minilize (Všechny týmy)",
+            xaxis_title="Kolo",
+            yaxis_title="Celkové body",
+            xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+            yaxis=dict(range=[0, df.values.max()*1.1]),
             hovermode="x unified"
         )
         st.plotly_chart(fig, use_container_width=True)
@@ -116,27 +114,25 @@ with tabs[1]:
     for entry_id, name in entries:
         try:
             history = fetch_team_history(entry_id)
-            points = []
+            cum_points = []
+            total = 0
             for gw in history:
                 pts = gw.get('event_points')
                 if pts is None:
                     pts = gw.get('points')
                 if pts is None:
                     pts = 0
-                points.append(pts)
-            if len(points) < max_rounds:
-                points += [0] * (max_rounds - len(points))
-            points_per_round[name] = points
+                total += pts
+                cum_points.append(total)
+            if len(cum_points) < max_rounds:
+                cum_points += [cum_points[-1] if cum_points else 0] * (max_rounds - len(cum_points))
+            points_per_round[name] = cum_points
         except Exception as e:
             st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
-    df_points = pd.DataFrame(points_per_round)
-    df_points.index = range(1, max_rounds + 1)
+    df_cum_points = pd.DataFrame(points_per_round)
+    df_cum_points.index = range(1, max_rounds + 1)
 
-    # kumulativní body
-    df_cum_points = df_points.cumsum()
-
-    # pořadí podle kumulativních bodů
     df_rankings = df_cum_points.rank(axis=1, method='min', ascending=False).astype(int)
     max_position = len(df_rankings.columns)
 
@@ -167,35 +163,34 @@ with tabs[1]:
                     label="Show all",
                     method="update",
                     args=[{"visible": [True]*max_position},
-                          {"title": "Vývoj pořadí v minilize (Všechny týmy)"}]
+                          {"title": "Vývoj kumulativního pořadí v minilize (Všechny týmy)"}]
                 )
             ],
             pad={"r": 10, "t": 10},
             showactive=False,
             x=0,
             xanchor="left",
-            y=1.15,
+            y=1.25,
             yanchor="top"
-        )]
-    )
-
-    fig.update_layout(
-        title="Vývoj pořadí v minilize podle kumulativních bodů",
-        xaxis_title="Kolo",
-        yaxis_title="Pořadí v minilize (1 = nejlepší)",
-        xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-        yaxis=dict(range=[1, max_position], autorange="reversed"),
+        )],
         legend=dict(
             orientation="h",
             yanchor="bottom",
-            y=1.1,
+            y=1.2,
             xanchor="right",
             x=1,
             xref="paper",
             yref="paper",
             bgcolor="rgba(0,0,0,0)"
         ),
-        margin=dict(l=40, r=40, t=80, b=40),
+        margin=dict(l=40, r=40, t=120, b=40),
+        autosize=False,
+        height=600,
+        title="Vývoj kumulativního pořadí v minilize (Všechny týmy)",
+        xaxis_title="Kolo",
+        yaxis_title="Pořadí v minilize (1 = nejlepší)",
+        xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+        yaxis=dict(range=[1, max_position], autorange="reversed"),
         hovermode="x unified"
     )
     st.plotly_chart(fig, use_container_width=True)
