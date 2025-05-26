@@ -29,8 +29,8 @@ tabs = st.tabs([
     "4️⃣ Aktuální pořadí miniligy"
 ])
 
-# === Záložka 1: Vývoj bodů ===
 with tabs[0]:
+    # Vývoj celkových bodů
     entries = fetch_league_data(league_id)
     df = pd.DataFrame()
     max_rounds = 38
@@ -69,7 +69,7 @@ with tabs[0]:
                         dict(
                             label="Hide all",
                             method="update",
-                            args=[{"visible": [False]*len(df.columns)},
+                            args=[{"visible": ["legendonly"]*len(df.columns)},
                                   {"title": "Všechny čáry skryty"}]
                         ),
                         dict(
@@ -87,6 +87,11 @@ with tabs[0]:
                     yanchor="top"
                 )
             ],
+            title="Vývoj celkových bodů v minilize (Všechny týmy)",
+            xaxis_title="Kolo",
+            yaxis_title="Celkové body",
+            xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+            yaxis=dict(range=[0, df.values.max()*1.1]),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -102,18 +107,10 @@ with tabs[0]:
             margin=dict(l=40, r=40, t=60, b=40),
             hovermode="x unified"
         )
-
-        fig.update_layout(
-            title="Vývoj celkových bodů v minilize (Všechny týmy)",
-            xaxis_title="Kolo",
-            yaxis_title="Celkové body",
-            xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-            yaxis=dict(range=[0, df.values.max()*1.1])
-        )
         st.plotly_chart(fig, use_container_width=True)
 
-# === Záložka 2: Vývoj pořadí v minilize (kumulativní) ===
 with tabs[1]:
+    # Vývoj pořadí kumulativně v minilize
     entries = fetch_league_data(league_id)
     max_rounds = 38
 
@@ -121,28 +118,26 @@ with tabs[1]:
     for entry_id, name in entries:
         try:
             history = fetch_team_history(entry_id)
-            points = []
+            total_points = []
+            cumulative = 0
             for gw in history:
                 pts = gw.get('event_points')
                 if pts is None:
                     pts = gw.get('points')
                 if pts is None:
                     pts = 0
-                points.append(pts)
-            if len(points) < max_rounds:
-                points += [0] * (max_rounds - len(points))
-            points_per_round[name] = points
+                cumulative += pts
+                total_points.append(cumulative)
+            if len(total_points) < max_rounds:
+                total_points += [total_points[-1] if total_points else 0] * (max_rounds - len(total_points))
+            points_per_round[name] = total_points
         except Exception as e:
             st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
     df_points = pd.DataFrame(points_per_round)
     df_points.index = range(1, max_rounds + 1)
 
-    # Kumulativní součet bodů do daného kola (pro pořadí)
-    df_cumsum = df_points.cumsum()
-
-    # Pořadí na základě kumulativních bodů v kole (1 = nejlepší)
-    df_rankings = df_cumsum.rank(axis=1, method='min', ascending=False).astype(int)
+    df_rankings = df_points.rank(axis=1, method='min', ascending=False).astype(int)
     max_position = len(df_rankings.columns)
 
     fig = go.Figure()
@@ -166,7 +161,7 @@ with tabs[1]:
                     dict(
                         label="Hide all",
                         method="update",
-                        args=[{"visible": [False]*max_position},
+                        args=[{"visible": ["legendonly"]*max_position},
                               {"title": "Všechny čáry skryty"}]
                     ),
                     dict(
@@ -184,6 +179,11 @@ with tabs[1]:
                 yanchor="top"
             )
         ],
+        title="Vývoj pořadí v minilize podle kumulativních bodů (Všechny týmy)",
+        xaxis_title="Kolo",
+        yaxis_title="Pořadí v minilize (1 = nejlepší)",
+        xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+        yaxis=dict(range=[1, max_position], autorange="reversed"),
         legend=dict(
             orientation="h",
             yanchor="bottom",
@@ -199,18 +199,10 @@ with tabs[1]:
         margin=dict(l=40, r=40, t=60, b=40),
         hovermode="x unified"
     )
-
-    fig.update_layout(
-        title="Vývoj pořadí v minilize podle kumulativních bodů (Všechny týmy)",
-        xaxis_title="Kolo",
-        yaxis_title="Pořadí v minilize (1 = nejlepší)",
-        xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-        yaxis=dict(range=[1, max_position], autorange="reversed")
-    )
     st.plotly_chart(fig, use_container_width=True)
 
-# === Záložka 3: Top 30 bodových výkonů ===
 with tabs[2]:
+    # Top 30 bodových výkonů v jednom kole
     entries = fetch_league_data(league_id)
     performances = []
 
@@ -239,8 +231,8 @@ with tabs[2]:
         st.subheader("🔥 Top 30 bodových výkonů v rámci jednoho kola")
         st.table(top30)
 
-# === Záložka 4: Aktuální pořadí miniligy ===
 with tabs[3]:
+    # Aktuální pořadí miniligy podle celkových bodů
     entries = fetch_league_data(league_id)
     teams_data = []
 
