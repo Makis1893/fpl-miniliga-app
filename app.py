@@ -2,230 +2,172 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.graph_objects as go
-from requests.exceptions import HTTPError
 
-st.set_page_config(layout="wide", page_title="FPL Miniliga")
+st.set_page_config(layout="wide")
 
-# Vstup pro ID miniligy - default 36264
-league_id = st.sidebar.text_input("Zadej ID miniligy:", value="36264")
+st.title("Fantasy Premier League - Miniliga")
 
-try:
-    league_id = int(league_id)
-except ValueError:
-    st.error("ID miniligy musí být číslo!")
-    st.stop()
+MINILIGA_ID = st.text_input("Zadej ID miniligy", value="36264")
 
-max_rounds = 38
-
-@st.cache_data(ttl=3600)
-def fetch_league_data(league_id):
-    url = f"https://fantasy.premierleague.com/api/leagues-classic/{league_id}/standings/"
+@st.cache_data(show_spinner=False)
+def fetch_miniliga_entries(miniliga_id):
+    url = f"https://fantasy.premierleague.com/api/leagues-classic/{miniliga_id}/standings/"
     entries = []
     page = 1
     while True:
-        r = requests.get(url + f"?page_standings={page}")
-        r.raise_for_status()
+        r = requests.get(url, params={"page_standings": page})
+        if r.status_code != 200:
+            st.error(f"Chyba při načítání miniligy: {r.status_code}")
+            return []
         data = r.json()
-        standings = data['standings']['results']
-        for entry in standings:
-            entries.append((entry['entry'], entry['player_name']))
-        if not data['standings']['has_next']:
+        page_entries = data.get("standings", {}).get("results", [])
+        if not page_entries:
             break
-        page += 1
+        for e in page_entries:
+            entries.append((e["entry"], e["player_name"]))
+        if data.get("standings", {}).get("has_next", False):
+            page += 1
+        else:
+            break
     return entries
 
-# Globální proměnná pro zobrazení 404 hlášky jen jednou
-not_found_teams = []
-
+@st.cache_data(show_spinner=False)
 def fetch_team_history_safe(entry_id):
     url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/event-history/"
-    try:
-        r = requests.get(url)
-        r.raise_for_status()
-        data = r.json()
-        return data['current']
-    except HTTPError as http_err:
-        if r.status_code == 404:
-            if entry_id not in not_found_teams:
-                not_found_teams.append(entry_id)
-            return None
-        else:
-            st.error(f"HTTP chyba při načítání dat pro tým {entry_id}: {http_err}")
-            return None
-    except Exception as e:
-        st.error(f"Chyba při načítání dat pro tým {entry_id}: {e}")
+    r = requests.get(url)
+    if r.status_code != 200:
         return None
+    return r.json()
 
-def create_hide_show_buttons(num_traces):
-    buttons = []
-    buttons.append(dict(
-        label="Show all",
-        method="update",
-        args=[{"visible": [True] * num_traces}]
-    ))
-    buttons.append(dict(
-        label="Hide all",
-        method="update",
-        args=[{"visible": [False] * num_traces}]
-    ))
-    return [dict(
-        type="buttons",
-        direction="right",
-        buttons=buttons,
-        pad={"r": 10, "t": 10},
-        showactive=False,
-        x=0,
-        y=1.1,
-        xanchor="left",
-        yanchor="top"
-    )]
-
-st.title("Fantasy Premier League Miniliga")
-
-if not league_id:
-    st.warning("Zadej prosím ID miniligy v levém panelu.")
+if not MINILIGA_ID.strip():
+    st.warning("Zadej ID miniligy pro načtení dat.")
     st.stop()
 
-# Načtení týmů v minilize
-try:
-    entries = fetch_league_data(league_id)
-except Exception as e:
-    st.error(f"Chyba při načítání dat miniligy: {e}")
-    st.stop()
-
+entries = fetch_miniliga_entries(MINILIGA_ID)
 if not entries:
-    st.warning("Miniliga nemá žádné týmy nebo je neplatné ID.")
+    st.error("Miniliga nenalezena nebo prázdná.")
     st.stop()
 
-# Načtení historie týmů - může chvíli trvat
 team_histories = {}
-with st.spinner("Načítám historii týmů..."):
+teams_without_data = []
+
+with st.spinner(f"Načítám historii {len(entries)} týmů miniligy..."):
     for entry_id, name in entries:
         history = fetch_team_history_safe(entry_id)
         if history is not None:
             team_histories[name] = history
+        else:
+            teams_without_data.append(name)
 
-# Ukázat jednou upozornění na týmy bez historie
-if not_found_teams:
-    st.warning(f"Týmy s ID {', '.join(map(str, not_found_teams))} nemají dostupnou historii (404 Not Found) a byly přeskočeny.")
+if teams_without_data:
+    st.warning(f"Týmy bez dostupné historie: {', '.join(teams_without_data)}")
+st.info(f"Načteno dat pro {len(team_histories)} týmů ze {len(entries)} v minilize.")
 
-# Pokud žádné týmy nemají historii
 if not team_histories:
     st.error("Žádný tým nemá dostupnou historii, nelze zobrazit data.")
     st.stop()
 
-# Založky
-tabs = st.tabs(["Vývoj bodů týmů", "Top 30 bodových výkonů", "Vývoj pořadí v minilize", "Pořadí v minilize"])
+# --- Připravíme data pro všechny týmy ---
+max_event = 38  # počet kol
 
-# --- 1. Vývoj bodů týmů ---
+# Body za jednotlivá kola (vždy 38 kol)
+points_df = pd.DataFrame(index=range(1, max_event+1))
+for name, history in team_histories.items():
+    # history je list dictů s klíčem 'event' a 'points'
+    df = pd.DataFrame(history)
+    # Pokud chybí nějaké kolo, doplníme na 38 kol s nulami
+    df = df.set_index("event").reindex(range(1, max_event+1), fill_value=0)
+    points_df[name] = df["points"]
+
+# Pořadí v minilize kumulativně (počítá se podle součtu bodů po každém kole)
+ranks_df = pd.DataFrame(index=range(1, max_event+1))
+
+for event in range(1, max_event+1):
+    # Kumulativní body do kola "event"
+    cum_points = points_df.loc[:event].sum()
+    # Seřadíme podle bodů sestupně, čím více bodů, tím lepší pořadí (1 = nejlepší)
+    rank = cum_points.rank(method="min", ascending=False)
+    ranks_df[event] = rank
+
+ranks_df = ranks_df.T  # Aby byly řádky kola, sloupce týmy
+
+# --- Výběr tabů ---
+tabs = st.tabs(["Vývoj bodů", "Vývoj pořadí", "Top 30 výkonů v kole", "Konečné pořadí"])
+
+# --- 1) Vývoj bodů ---
 with tabs[0]:
-    st.header("Vývoj bodů týmů v minilize")
+    st.header("Vývoj bodů v minilize")
+    selected_teams = st.multiselect("Vyber týmy k zobrazení (výchozí: všechny)", list(points_df.columns), default=list(points_df.columns))
 
-    points_per_round = {}
-    for name, history in team_histories.items():
-        points = [gw.get('event_points', 0) for gw in history]
-        if len(points) < max_rounds:
-            points += [0] * (max_rounds - len(points))
-        points_per_round[name] = points
+    if selected_teams:
+        fig = go.Figure()
+        for team in selected_teams:
+            fig.add_trace(go.Scatter(
+                x=points_df.index,
+                y=points_df[team],
+                mode="lines+markers",
+                name=team,
+            ))
+        fig.update_layout(
+            xaxis_title="Kolo",
+            yaxis_title="Body v kole",
+            xaxis=dict(tickmode="linear", dtick=1, range=[1, max_event]),
+            hovermode="x unified"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Vyber alespoň jeden tým pro zobrazení grafu.")
 
-    df_points = pd.DataFrame(points_per_round)
-    df_points.index = range(1, max_rounds + 1)
-
-    fig = go.Figure()
-    for name in df_points.columns:
-        fig.add_trace(go.Scatter(x=df_points.index, y=df_points[name], mode='lines+markers', name=name, visible=True))
-
-    fig.update_layout(
-        title="Body týmů po jednotlivých kolech",
-        xaxis_title="Kolo",
-        yaxis_title="Body v kole",
-        xaxis=dict(tickmode="linear", dtick=1, range=[1, max_rounds]),
-        updatemenus=create_hide_show_buttons(len(df_points.columns)),
-        height=600,
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-# --- 2. Top 30 bodových výkonů v rámci jednoho kola ---
+# --- 2) Vývoj pořadí ---
 with tabs[1]:
+    st.header("Vývoj pořadí v minilize (kumulativně)")
+    selected_teams_ranks = st.multiselect("Vyber týmy k zobrazení (výchozí: všechny)", list(ranks_df.columns), default=list(ranks_df.columns))
+
+    if selected_teams_ranks:
+        fig = go.Figure()
+        for team in selected_teams_ranks:
+            fig.add_trace(go.Scatter(
+                x=ranks_df.index,
+                y=ranks_df[team],
+                mode="lines+markers",
+                name=team,
+                # invertujeme osu y, aby 1 bylo nahoře
+                yaxis="y"
+            ))
+        fig.update_layout(
+            xaxis_title="Kolo",
+            yaxis_title="Pořadí (1 = nejlepší)",
+            yaxis=dict(autorange="reversed", dtick=1, range=[1, len(ranks_df.columns)]),
+            xaxis=dict(tickmode="linear", dtick=1, range=[1, max_event]),
+            hovermode="x unified"
+        )
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Vyber alespoň jeden tým pro zobrazení grafu.")
+
+# --- 3) Top 30 bodových výkonů v rámci jednoho kola ---
+with tabs[2]:
     st.header("Top 30 bodových výkonů v rámci jednoho kola")
 
-    performance_list = []
-    for name, history in team_histories.items():
-        for round_num, gw in enumerate(history, 1):
-            points = gw.get('event_points', 0)
-            performance_list.append({"Tým": name, "Kolo": round_num, "Body": points})
+    # Vytvoříme DataFrame s (tým, kolo, body)
+    performances = []
+    for team in points_df.columns:
+        for event in points_df.index:
+            performances.append({"team": team, "event": event, "points": points_df.loc[event, team]})
+    perf_df = pd.DataFrame(performances)
+    perf_df = perf_df.sort_values(by="points", ascending=False).head(30).reset_index(drop=True)
 
-    df_performance = pd.DataFrame(performance_list)
-    df_performance = df_performance.sort_values(by="Body", ascending=False).head(30)
-    df_performance.reset_index(drop=True, inplace=True)
-    df_performance.index += 1
-    st.table(df_performance)
+    st.dataframe(perf_df.style.format({"points": "{:.0f}", "event": "{:.0f}"}), use_container_width=True)
 
-# --- 3. Vývoj pořadí v rámci miniligy po kolech ---
-with tabs[2]:
-    st.header("Vývoj pořadí týmů v minilize po jednotlivých kolech")
-
-    df_points_cum = pd.DataFrame()
-    for name, history in team_histories.items():
-        points = [gw.get('event_points', 0) for gw in history]
-        if len(points) < max_rounds:
-            points += [0] * (max_rounds - len(points))
-        df_points_cum[name] = points
-
-    df_points_cum.index = range(1, max_rounds + 1)
-    df_cum_sum = df_points_cum.cumsum()
-
-    order_data = {}
-    for round_num in df_cum_sum.index:
-        round_points = df_cum_sum.loc[round_num]
-        round_order = round_points.rank(ascending=False, method='min')
-        order_data[round_num] = round_order
-
-    df_order = pd.DataFrame(order_data).T
-    df_order.index.name = "Kolo"
-    df_order.columns.name = "Tým"
-
-    fig_order = go.Figure()
-    for name in df_order.columns:
-        fig_order.add_trace(go.Scatter(
-            x=df_order.index,
-            y=df_order[name],
-            mode='lines+markers',
-            name=name,
-            visible=True,
-            hovertemplate='Kolo %{x}<br>Pořadí: %{y}<extra></extra>'
-        ))
-
-    fig_order.update_layout(
-        title="Vývoj pořadí týmů v minilize (kumulativní body)",
-        xaxis_title="Kolo",
-        yaxis_title="Pořadí (1 = nejlepší)",
-        yaxis=dict(autorange="reversed", dtick=1),
-        xaxis=dict(tickmode="linear", dtick=1, range=[1, max_rounds]),
-        updatemenus=create_hide_show_buttons(len(df_order.columns)),
-        height=600,
-    )
-    st.plotly_chart(fig_order, use_container_width=True)
-
-# --- 4. Aktuální pořadí miniligy ---
+# --- 4) Konečné pořadí ---
 with tabs[3]:
-    st.header("Aktuální pořadí miniligy")
-
-    url_standings = f"https://fantasy.premierleague.com/api/leagues-classic/{league_id}/standings/"
-    try:
-        response = requests.get(url_standings)
-        response.raise_for_status()
-        data = response.json()
-        standings = data['standings']['results']
-        df_standings = pd.DataFrame(standings)
-        df_standings = df_standings[['rank', 'player_name', 'entry', 'total']]
-        df_standings.rename(columns={
-            'rank': 'Pořadí',
-            'player_name': 'Tým',
-            'entry': 'ID Týmu',
-            'total': 'Body celkem'
-        }, inplace=True)
-        df_standings.set_index('Pořadí', inplace=True)
-        st.dataframe(df_standings.style.format({"Body celkem": "{:.0f}"}), use_container_width=True)
-    except Exception as e:
-        st.error(f"Chyba při načítání aktuálního pořadí: {e}")
+    st.header("Konečné pořadí v minilize")
+    final_points = points_df.sum()
+    final_ranks = final_points.rank(method="min", ascending=False)
+    final_df = pd.DataFrame({
+        "Tým": final_points.index,
+        "Body celkem": final_points.values,
+        "Pořadí": final_ranks.values.astype(int)
+    })
+    final_df = final_df.sort_values("Pořadí")
+    st.dataframe(final_df.reset_index(drop=True), use_container_width=True)
