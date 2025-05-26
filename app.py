@@ -59,6 +59,7 @@ with tabs[0]:
                 hovertemplate='Kolo %{x}<br>Body celkem: %{y}<br>Tým: '+team+'<extra></extra>'
             ))
 
+        # Zde opravujeme viditelnost: Hide all = "legendonly"
         fig.update_layout(
             updatemenus=[dict(
                 type="buttons",
@@ -67,7 +68,7 @@ with tabs[0]:
                     dict(
                         label="Hide all",
                         method="update",
-                        args=[{"visible": [False]*len(df.columns)},
+                        args=[{"visible": ["legendonly"]*len(df.columns)},
                               {"title": "Všechny čáry skryty"}]
                     ),
                     dict(
@@ -148,6 +149,7 @@ with tabs[1]:
             hovertemplate='Kolo %{x}<br>Pořadí v minilize: %{y}<br>Tým: '+team+'<extra></extra>'
         ))
 
+    # Zde taky používáme "legendonly" místo False
     fig.update_layout(
         updatemenus=[dict(
             type="buttons",
@@ -156,7 +158,7 @@ with tabs[1]:
                 dict(
                     label="Hide all",
                     method="update",
-                    args=[{"visible": [False]*max_position},
+                    args=[{"visible": ["legendonly"]*max_position},
                           {"title": "Všechny čáry skryty"}]
                 ),
                 dict(
