@@ -28,7 +28,7 @@ def fetch_team_history_full(entry_id):
     response = requests.get(url)
     return response.json().get('current', [])
 
-tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů"])
+tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů", "🏆 Pořadí miniligy"])
 
 with tabs[0]:
     if st.button("Zobrazit vývoj bodů", key="button_vyvoj"):
@@ -37,9 +37,8 @@ with tabs[0]:
 
         for entry_id, name in entries:
             try:
-                display_name = "Podoli-Pistin" if name.lower() == "podoli-pistin" else name
                 points = fetch_team_history(entry_id)
-                df[display_name] = points
+                df[name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
@@ -104,6 +103,28 @@ with tabs[1]:
 
         if performances:
             df_perf = pd.DataFrame(performances)
+            # Top 10 výkonů v rámci jednoho kola
             top10 = df_perf.sort_values(by="Body", ascending=False).head(10)
             st.subheader("🔥 Top 10 bodových výkonů v jednom kole")
             st.table(top10.reset_index(drop=True))
+
+with tabs[2]:
+    if st.button("Zobrazit aktuální pořadí", key="button_poradi"):
+        entries = fetch_league_data(league_id)
+        # Uspořádáme podle aktuálních celkových bodů (z posledního kola)
+        teams_data = []
+
+        for entry_id, name in entries:
+            try:
+                points = fetch_team_history(entry_id)
+                total = points[-1] if points else 0
+                teams_data.append({"Tým": name, "Body celkem": total})
+            except Exception as e:
+                st.warning(f"Chyba při načítání dat pro {name}: {e}")
+
+        if teams_data:
+            df_rank = pd.DataFrame(teams_data)
+            df_rank = df_rank.sort_values(by="Body celkem", ascending=False).reset_index(drop=True)
+            df_rank.index += 1
+            st.subheader("🏆 Aktuální pořadí miniligy")
+            st.table(df_rank)
