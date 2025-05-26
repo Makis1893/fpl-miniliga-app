@@ -24,30 +24,24 @@ def fetch_team_history(eid):
 # Načti seznam týmů
 entries = fetch_league_data(league_id)
 
-# 1) Připrav DataFrame bodů z 'points'
+# Připrav DataFrame bodů za každé kolo (event_points)
 points_df = pd.DataFrame(index=range(1, max_rounds+1))
+# Připrav DataFrame kumulativních bodů (total_points)
+cum_df    = pd.DataFrame(index=range(1, max_rounds+1))
+# Připrav DataFrame hodnoty týmu
+value_df  = pd.DataFrame(index=range(1, max_rounds+1))
+
 for eid, name in entries:
     hist = fetch_team_history(eid)
-    pts = [gw.get("points", 0) for gw in hist]
-    pts += [0] * (max_rounds - len(pts))
-    points_df[name] = pts
-
-# Kontrola, že máme nenulová data
-st.write("Ukázka načtených bodů (points_df.head()):")
-st.write(points_df.head())
-
-# 2) DataFrame pro kumulativní total_points
-cum_df = pd.DataFrame(index=range(1, max_rounds+1))
-for eid, name in entries:
-    hist = fetch_team_history(eid)
+    # event_points
+    ev = [gw.get("event_points", 0) for gw in hist]
+    ev += [0] * (max_rounds - len(ev))
+    points_df[name] = ev
+    # total_points
     tot = [gw.get("total_points", 0) for gw in hist]
     tot += [tot[-1] if tot else 0] * (max_rounds - len(tot))
     cum_df[name] = tot
-
-# 3) DataFrame hodnoty týmu
-value_df = pd.DataFrame(index=range(1, max_rounds+1))
-for eid, name in entries:
-    hist = fetch_team_history(eid)
+    # value v pencích → M£
     val = [gw.get("value", 0) for gw in hist]
     val += [val[-1] if val else 0] * (max_rounds - len(val))
     value_df[name] = [v/10 for v in val]
@@ -83,10 +77,13 @@ tabs = st.tabs([
 with tabs[0]:
     fig = go.Figure()
     for team in cum_df.columns:
-        fig.add_trace(go.Scatter(x=cum_df.index, y=cum_df[team], mode="lines+markers", name=team))
+        fig.add_trace(go.Scatter(
+            x=cum_df.index, y=cum_df[team],
+            mode="lines+markers", name=team
+        ))
     add_hide_show(fig, len(cum_df.columns), "Kumulativní body")
     fig.update_layout(
-        title="Kumulativní součet bodů",
+        title="Kumulativní součet bodů v minilize",
         xaxis=dict(title="Kolo", tickmode="linear", dtick=1, range=[1, max_rounds]),
         yaxis_title="Body",
         hovermode="x unified"
@@ -98,38 +95,58 @@ with tabs[1]:
     ranks = cum_df.rank(axis=1, method="min", ascending=False).astype(int)
     fig = go.Figure()
     for team in ranks.columns:
-        fig.add_trace(go.Scatter(x=ranks.index, y=ranks[team], mode="lines+markers", name=team))
+        fig.add_trace(go.Scatter(
+            x=ranks.index, y=ranks[team],
+            mode="lines+markers", name=team
+        ))
     add_hide_show(fig, len(ranks.columns), "Vývoj pořadí")
     fig.update_layout(
-        title="Vývoj pořadí (kumulativní body)",
+        title="Vývoj pořadí v minilize (kumulativní body)",
         xaxis=dict(title="Kolo", tickmode="linear", dtick=1, range=[1, max_rounds]),
         yaxis=dict(title="Pořadí", autorange="reversed", dtick=1, range=[1, len(ranks.columns)]),
         hovermode="x unified"
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tab 3: Top 30 výkonů (z points_df)
+# Tab 3: Top 30 výkonů (body v kole)
 with tabs[2]:
     recs = []
     for event in points_df.index:
         for team in points_df.columns:
-            recs.append({"Tým": team, "Kolo": event, "Body": points_df.at[event, team]})
-    df_top = pd.DataFrame(recs).sort_values("Body", ascending=False).head(30).reset_index(drop=True)
-    df_top.index += 1; df_top.index.name="Pořadí"
+            recs.append({
+                "Tým": team,
+                "Kolo": event,
+                "Body": points_df.at[event, team]
+            })
+    df_top = pd.DataFrame(recs) \
+        .sort_values("Body", ascending=False) \
+        .head(30) \
+        .reset_index(drop=True)
+    df_top.index += 1
+    df_top.index.name = "Pořadí"
     st.table(df_top)
 
-# Tab 4: Aktuální pořadí (poslední řada cum_df)
+# Tab 4: Aktuální pořadí
 with tabs[3]:
-    recs = [{"Tým": team, "Body celkem": cum_df.at[max_rounds, team]} for team in cum_df.columns]
-    df_now = pd.DataFrame(recs).sort_values("Body celkem", ascending=False).reset_index(drop=True)
-    df_now.index += 1; df_now.index.name="Pořadí"
+    recs = [
+        {"Tým": team, "Body celkem": cum_df.at[max_rounds, team]}
+        for team in cum_df.columns
+    ]
+    df_now = pd.DataFrame(recs) \
+        .sort_values("Body celkem", ascending=False) \
+        .reset_index(drop=True)
+    df_now.index += 1
+    df_now.index.name = "Pořadí"
     st.table(df_now)
 
-# Tab 5: Vývoj hodnoty
+# Tab 5: Vývoj hodnoty týmu
 with tabs[4]:
     fig = go.Figure()
     for team in value_df.columns:
-        fig.add_trace(go.Scatter(x=value_df.index, y=value_df[team], mode="lines+markers", name=team))
+        fig.add_trace(go.Scatter(
+            x=value_df.index, y=value_df[team],
+            mode="lines+markers", name=team
+        ))
     add_hide_show(fig, len(value_df.columns), "Vývoj hodnoty")
     fig.update_layout(
         title="Vývoj hodnoty týmu (M£)",
@@ -139,19 +156,18 @@ with tabs[4]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tab 6: Scatter bodů v kolech (z points_df)
+# Tab 6: Scatter event_points
 with tabs[5]:
     fig = go.Figure()
     for team in points_df.columns:
         fig.add_trace(go.Scatter(
-            x=points_df.index, y=points_df[team], mode="markers", name=team,
-            marker=dict(size=6),
-            hovertemplate='Tým: %{legendgroup}<br>Kolo %{x}<br>Body %{y}<extra></extra>',
-            legendgroup=team
+            x=points_df.index, y=points_df[team],
+            mode="markers", name=team, marker=dict(size=6),
+            hovertemplate='Tým: %{name}<br>Kolo %{x}<br>Body %{y}<extra></extra>'
         ))
     add_hide_show(fig, len(points_df.columns), "Scatter bodů")
     fig.update_layout(
-        title="Bodový scatter – event_points v každém kole",
+        title="Bodový scatter – body týmů v jednotlivých kolech",
         xaxis=dict(title="Kolo", tickmode="linear", dtick=1, range=[1, max_rounds]),
         yaxis_title="Body",
         hovermode="closest"
