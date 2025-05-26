@@ -38,9 +38,9 @@ with tabs[0]:
         for entry_id, name in entries:
             try:
                 history = fetch_team_history(entry_id)
-                points = [gw['total_points'] for gw in history]
+                points = [gw.get('total_points', 0) for gw in history]
                 if len(points) < max_rounds:
-                    points += [points[-1]] * (max_rounds - len(points))
+                    points += [points[-1] if points else 0] * (max_rounds - len(points))
                 df[name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
@@ -86,14 +86,20 @@ with tabs[1]:
         entries = fetch_league_data(league_id)
         max_rounds = 38
 
-        # Sběr bodů v jednotlivých kolech
         points_per_round = {}
         for entry_id, name in entries:
             try:
                 history = fetch_team_history(entry_id)
-                points = [gw['event_points'] for gw in history]
+                points = []
+                for gw in history:
+                    pts = gw.get('event_points')
+                    if pts is None:
+                        pts = gw.get('points')
+                    if pts is None:
+                        pts = 0
+                    points.append(pts)
                 if len(points) < max_rounds:
-                    points += [0] * (max_rounds - len(points))  # doplnit nuly, pokud chybí kola
+                    points += [0] * (max_rounds - len(points))
                 points_per_round[name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
@@ -101,10 +107,9 @@ with tabs[1]:
         df_points = pd.DataFrame(points_per_round)
         df_points.index = range(1, max_rounds + 1)
 
-        # Vypočítáme pořadí v rámci miniligy pro každé kolo podle bodů v tom kole (1 = nejlepší)
         df_rankings = df_points.rank(axis=1, method='min', ascending=False).astype(int)
 
-        max_position = len(df_rankings.columns)  # počet týmů v minilize
+        max_position = len(df_rankings.columns)
 
         fig = go.Figure()
         for team in df_rankings.columns:
@@ -123,7 +128,7 @@ with tabs[1]:
             xaxis_title="Kolo",
             yaxis_title="Pořadí v minilize (1 = nejlepší)",
             xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-            yaxis=dict(range=[1, max_position], autorange="reversed"),  # 1 nahoře
+            yaxis=dict(range=[1, max_position], autorange="reversed"),
             legend=dict(
                 orientation="h",
                 yanchor="bottom",
@@ -148,13 +153,15 @@ with tabs[2]:
             try:
                 history = fetch_team_history(entry_id)
                 for gw in history:
-                    body = gw.get('event_points')
-                    if body is None:
-                        body = gw.get('points', 0)
+                    pts = gw.get('event_points')
+                    if pts is None:
+                        pts = gw.get('points')
+                    if pts is None:
+                        pts = 0
                     performances.append({
                         "Tým": name,
-                        "Kolo": gw['event'],
-                        "Body": body
+                        "Kolo": gw.get('event', 0),
+                        "Body": pts
                     })
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
@@ -175,7 +182,7 @@ with tabs[3]:
         for entry_id, name in entries:
             try:
                 history = fetch_team_history(entry_id)
-                total = history[-1]['total_points'] if history else 0
+                total = history[-1].get('total_points', 0) if history else 0
                 teams_data.append({"Tým": name, "Body celkem": total})
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
