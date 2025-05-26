@@ -38,7 +38,7 @@ def create_hide_show_buttons(num_traces):
                 dict(
                     label="Hide all",
                     method="restyle",
-                    args=[{"visible": [False] * num_traces}]
+                    args=[{"visible": ['legendonly'] * num_traces}]
                 ),
                 dict(
                     label="Show all",
@@ -65,6 +65,7 @@ with tabs[0]:
             try:
                 history = fetch_team_history(entry_id)
                 points = [gw.get('total_points', 0) for gw in history]
+                # pokud méně kol než 38, prodluž poslední hodnotou
                 if len(points) < max_rounds:
                     points += [points[-1] if points else 0] * (max_rounds - len(points))
                 df[name] = points
@@ -117,14 +118,9 @@ with tabs[1]:
         for entry_id, name in entries:
             try:
                 history = fetch_team_history(entry_id)
-                points = []
-                for gw in history:
-                    pts = gw.get('event_points')
-                    if pts is None:
-                        pts = gw.get('points')
-                    if pts is None:
-                        pts = 0
-                    points.append(pts)
+                # vezmeme event_points z každého kola, pokud chybí, 0
+                points = [gw.get('event_points', 0) for gw in history]
+                # doplníme nulami pokud méně než 38 kol
                 if len(points) < max_rounds:
                     points += [0] * (max_rounds - len(points))
                 points_per_round[name] = points
@@ -134,7 +130,12 @@ with tabs[1]:
         df_points = pd.DataFrame(points_per_round)
         df_points.index = range(1, max_rounds + 1)
 
-        df_rankings = df_points.rank(axis=1, method='min', ascending=False).astype(int)
+        # kumulativní součet bodů po kolech (průběžné body)
+        df_cum = df_points.cumsum()
+
+        # pořadí v rámci miniligy podle kumulativních bodů - 1 = nejlepší
+        df_rankings = df_cum.rank(axis=1, method='min', ascending=False).astype(int)
+
         max_position = len(df_rankings.columns)
 
         fig = go.Figure()
@@ -151,7 +152,7 @@ with tabs[1]:
 
         fig.update_layout(
             updatemenus=create_hide_show_buttons(max_position),
-            title="Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)",
+            title="Vývoj průběžného pořadí v minilize podle kumulativních bodů",
             xaxis_title="Kolo",
             yaxis_title="Pořadí v minilize (1 = nejlepší)",
             xaxis=dict(range=[1, 38], dtick=1, tick0=1),
@@ -182,9 +183,7 @@ with tabs[2]:
                 for gw in history:
                     pts = gw.get('event_points')
                     if pts is None:
-                        pts = gw.get('points')
-                    if pts is None:
-                        pts = 0
+                        pts = gw.get('points', 0)
                     performances.append({
                         "Tým": name,
                         "Kolo": gw.get('event', 0),
