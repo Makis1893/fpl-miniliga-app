@@ -69,13 +69,13 @@ with tabs[0]:
                         dict(
                             label="Hide all",
                             method="update",
-                            args=[{"visible": ["legendonly"]*len(df.columns)},
+                            args=[{"visible": ['legendonly'] * len(df.columns)},
                                   {"title": "Všechny čáry skryty"}]
                         ),
                         dict(
                             label="Show all",
                             method="update",
-                            args=[{"visible": [True]*len(df.columns)},
+                            args=[{"visible": [True] * len(df.columns)},
                                   {"title": "Vývoj celkových bodů v minilize (Všechny týmy)"}]
                         )
                     ],
@@ -161,13 +161,13 @@ with tabs[1]:
                     dict(
                         label="Hide all",
                         method="update",
-                        args=[{"visible": ["legendonly"]*max_position},
+                        args=[{"visible": ['legendonly'] * max_position},
                               {"title": "Všechny čáry skryty"}]
                     ),
                     dict(
                         label="Show all",
                         method="update",
-                        args=[{"visible": [True]*max_position},
+                        args=[{"visible": [True] * max_position},
                               {"title": "Vývoj pořadí v minilize podle kumulativních bodů (Všechny týmy)"}]
                     )
                 ],
