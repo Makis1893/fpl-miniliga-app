@@ -20,12 +20,7 @@ def fetch_league_data(league_id):
 def fetch_team_history(entry_id):
     url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
     response = requests.get(url)
-    return [gw['total_points'] for gw in response.json().get('current', [])]
-
-@st.cache_data
-def fetch_team_history_full(entry_id):
-    url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
-    response = requests.get(url)
+    # vrací seznam dictů, kde je i event_points (body za kolo)
     return response.json().get('current', [])
 
 tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů", "🏆 Pořadí miniligy"])
@@ -34,27 +29,28 @@ with tabs[0]:
     if st.button("Zobrazit vývoj bodů", key="button_vyvoj"):
         entries = fetch_league_data(league_id)
         df = pd.DataFrame()
+        max_rounds = 38
 
         for entry_id, name in entries:
             try:
-                points = fetch_team_history(entry_id)
+                history = fetch_team_history(entry_id)
+                # body za jednotlivá kola, použijeme total_points (kumulativní)
+                points = [gw['total_points'] for gw in history]
+                # doplníme na 38 kol (pokud chybí, doplní se nula)
+                points += [points[-1]] * (max_rounds - len(points)) if len(points) < max_rounds else []
                 df[name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
         if not df.empty:
-            df.index = range(1, len(df) + 1)
-            df = df.reindex(range(1, 39))
-            df_cum = df.fillna(method="ffill").fillna(0)
-
-            selected = df_cum
+            df.index = range(1, max_rounds + 1)
 
             fig = go.Figure()
 
-            for team in selected.columns:
+            for team in df.columns:
                 fig.add_trace(go.Scatter(
-                    x=selected.index,
-                    y=selected[team],
+                    x=df.index,
+                    y=df[team],
                     mode='lines+markers',
                     name=team,
                     line=dict(width=2),
@@ -67,7 +63,7 @@ with tabs[0]:
                 xaxis_title="Kolo",
                 yaxis_title="Celkové body",
                 xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-                yaxis=dict(range=[0, selected.values.max()*1.1]),
+                yaxis=dict(range=[0, df.values.max()*1.1]),
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
@@ -91,33 +87,32 @@ with tabs[1]:
 
         for entry_id, name in entries:
             try:
-                history = fetch_team_history_full(entry_id)
+                history = fetch_team_history(entry_id)
                 for gw in history:
                     performances.append({
                         "Tým": name,
                         "Kolo": gw['event'],
-                        "Body": gw['total_points']
+                        # Zde event_points (body za dané kolo), ne total_points
+                        "Body": gw.get('event_points', 0)
                     })
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
         if performances:
             df_perf = pd.DataFrame(performances)
-            # Top 10 výkonů v rámci jednoho kola
             top10 = df_perf.sort_values(by="Body", ascending=False).head(10)
-            st.subheader("🔥 Top 10 bodových výkonů v jednom kole")
+            st.subheader("🔥 Top 10 bodových výkonů v rámci jednoho kola")
             st.table(top10.reset_index(drop=True))
 
 with tabs[2]:
     if st.button("Zobrazit aktuální pořadí", key="button_poradi"):
         entries = fetch_league_data(league_id)
-        # Uspořádáme podle aktuálních celkových bodů (z posledního kola)
         teams_data = []
 
         for entry_id, name in entries:
             try:
-                points = fetch_team_history(entry_id)
-                total = points[-1] if points else 0
+                history = fetch_team_history(entry_id)
+                total = history[-1]['total_points'] if history else 0
                 teams_data.append({"Tým": name, "Body celkem": total})
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
