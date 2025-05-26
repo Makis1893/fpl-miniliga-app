@@ -6,7 +6,6 @@ import plotly.graph_objects as go
 st.set_page_config(layout="wide")
 st.title("Fantasy Premier League - Miniliga")
 
-# Vstup ID miniligy
 MINILIGA_ID = st.text_input("Zadej ID miniligy", value="36264")
 
 @st.cache_data(show_spinner=False)
@@ -69,17 +68,14 @@ if not team_histories:
 
 MAX_EVENTS = 38
 
-# DataFrame s body za jednotlivá kola pro všechny týmy (doplněné nulami, pokud chybí kola)
 points_df = pd.DataFrame(index=range(1, MAX_EVENTS+1))
 for team, hist in team_histories.items():
     df = pd.DataFrame(hist)
     df = df.set_index("event").reindex(range(1, MAX_EVENTS+1), fill_value=0)
     points_df[team] = df["points"]
 
-# Kumulativní body pro výpočet pořadí
 cumulative_points = points_df.cumsum()
 
-# Výpočet pořadí v rámci miniligy podle kumulativních bodů (menší pořadí = lepší)
 rank_df = pd.DataFrame(index=range(1, MAX_EVENTS+1))
 for event in range(1, MAX_EVENTS+1):
     rank_df[event] = cumulative_points.loc[event].rank(ascending=False, method="min")
