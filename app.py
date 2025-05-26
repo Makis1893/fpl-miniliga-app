@@ -73,9 +73,7 @@ max_event = 38  # počet kol
 # Body za jednotlivá kola (vždy 38 kol)
 points_df = pd.DataFrame(index=range(1, max_event+1))
 for name, history in team_histories.items():
-    # history je list dictů s klíčem 'event' a 'points'
     df = pd.DataFrame(history)
-    # Pokud chybí nějaké kolo, doplníme na 38 kol s nulami
     df = df.set_index("event").reindex(range(1, max_event+1), fill_value=0)
     points_df[name] = df["points"]
 
@@ -83,22 +81,17 @@ for name, history in team_histories.items():
 ranks_df = pd.DataFrame(index=range(1, max_event+1))
 
 for event in range(1, max_event+1):
-    # Kumulativní body do kola "event"
     cum_points = points_df.loc[:event].sum()
-    # Seřadíme podle bodů sestupně, čím více bodů, tím lepší pořadí (1 = nejlepší)
     rank = cum_points.rank(method="min", ascending=False)
     ranks_df[event] = rank
 
-ranks_df = ranks_df.T  # Aby byly řádky kola, sloupce týmy
+ranks_df = ranks_df.T
 
-# --- Výběr tabů ---
 tabs = st.tabs(["Vývoj bodů", "Vývoj pořadí", "Top 30 výkonů v kole", "Konečné pořadí"])
 
-# --- 1) Vývoj bodů ---
 with tabs[0]:
     st.header("Vývoj bodů v minilize")
     selected_teams = st.multiselect("Vyber týmy k zobrazení (výchozí: všechny)", list(points_df.columns), default=list(points_df.columns))
-
     if selected_teams:
         fig = go.Figure()
         for team in selected_teams:
@@ -118,11 +111,9 @@ with tabs[0]:
     else:
         st.info("Vyber alespoň jeden tým pro zobrazení grafu.")
 
-# --- 2) Vývoj pořadí ---
 with tabs[1]:
     st.header("Vývoj pořadí v minilize (kumulativně)")
     selected_teams_ranks = st.multiselect("Vyber týmy k zobrazení (výchozí: všechny)", list(ranks_df.columns), default=list(ranks_df.columns))
-
     if selected_teams_ranks:
         fig = go.Figure()
         for team in selected_teams_ranks:
@@ -131,7 +122,6 @@ with tabs[1]:
                 y=ranks_df[team],
                 mode="lines+markers",
                 name=team,
-                # invertujeme osu y, aby 1 bylo nahoře
                 yaxis="y"
             ))
         fig.update_layout(
@@ -145,21 +135,16 @@ with tabs[1]:
     else:
         st.info("Vyber alespoň jeden tým pro zobrazení grafu.")
 
-# --- 3) Top 30 bodových výkonů v rámci jednoho kola ---
 with tabs[2]:
     st.header("Top 30 bodových výkonů v rámci jednoho kola")
-
-    # Vytvoříme DataFrame s (tým, kolo, body)
     performances = []
     for team in points_df.columns:
         for event in points_df.index:
             performances.append({"team": team, "event": event, "points": points_df.loc[event, team]})
     perf_df = pd.DataFrame(performances)
     perf_df = perf_df.sort_values(by="points", ascending=False).head(30).reset_index(drop=True)
-
     st.dataframe(perf_df.style.format({"points": "{:.0f}", "event": "{:.0f}"}), use_container_width=True)
 
-# --- 4) Konečné pořadí ---
 with tabs[3]:
     st.header("Konečné pořadí v minilize")
     final_points = points_df.sum()
