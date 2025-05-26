@@ -190,4 +190,9 @@ with tabs[3]:
     df_standings.rename(columns={
         'rank': 'Pořadí',
         'player_name': 'Tým',
-        'entry': '
+        'entry': 'ID Týmu',
+        'total': 'Body celkem'
+    }, inplace=True)
+    df_standings.set_index('Pořadí', inplace=True)
+
+    st.dataframe(df_standings.style.format({"Body celkem": "{:.0f}"}), use_container_width=True)
