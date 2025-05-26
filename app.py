@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import requests
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 
 st.set_page_config(page_title="FPL Miniliga - Graf", layout="wide")
 st.title("📊 Fantasy Premier League – Vývoj bodů v minilize")
@@ -28,7 +28,6 @@ if st.button("📈 Zobrazit graf"):
 
     for entry_id, name in entries:
         try:
-            # Normalizuj jméno pro srovnání
             display_name = "Podoli-Pistin" if name.lower() == "podoli-pistin" else name
             points = fetch_team_history(entry_id)
             df[display_name] = points
@@ -36,11 +35,10 @@ if st.button("📈 Zobrazit graf"):
             st.warning(f"Chyba při načítání dat pro {name}: {e}")
 
     if not df.empty:
-        df.index = range(1, len(df) + 1)  # Gameweeks
-        df = df.reindex(range(1, 39))     # Extend to 38 GWs
+        df.index = range(1, len(df) + 1)
+        df = df.reindex(range(1, 39))
         df_cum = df.fillna(method="ffill").fillna(0)
 
-        # Vybrat top 5 týmů + "Podoli-Pistin"
         final_scores = df_cum.iloc[-1]
         top5 = final_scores.sort_values(ascending=False).head(5)
         team_set = set(top5.index.tolist())
@@ -48,17 +46,34 @@ if st.button("📈 Zobrazit graf"):
             team_set.add("Podoli-Pistin")
         selected = df_cum[list(team_set)]
 
-        # 🎨 Vykreslit graf
-        st.subheader("📈 Vývoj celkových bodů (Top 5 + Podoli-Pistin)")
+        fig = go.Figure()
 
-        fig, ax = plt.subplots(figsize=(12, 6))
-        for col in selected.columns:
-            ax.plot(selected.index, selected[col], label=col, linewidth=2)
+        for team in selected.columns:
+            fig.add_trace(go.Scatter(
+                x=selected.index,
+                y=selected[team],
+                mode='lines+markers',
+                name=team,
+                line=dict(width=2),
+                marker=dict(size=5),
+                hovertemplate='Kolo %{x}<br>Body: %{y}<br>Tým: '+team+'<extra></extra>'
+            ))
 
-        ax.set_xlim(1, 38)
-        ax.set_xlabel("Kolo", fontsize=12)
-        ax.set_ylabel("Celkové body", fontsize=12)
-        ax.set_title("Vývoj bodů v minilize", fontsize=14)
-        ax.grid(True, linestyle="--", alpha=0.5)
-        ax.legend(loc="center left", bbox_to_anchor=(1.0, 0.5))
-        st.pyplot(fig)
+        fig.update_layout(
+            title="Vývoj bodů v minilize (Top 5 + Podoli-Pistin)",
+            xaxis_title="Kolo",
+            yaxis_title="Celkové body",
+            xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+            yaxis=dict(range=[0, selected.values.max()*1.1]),
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            ),
+            margin=dict(l=40, r=40, t=60, b=40),
+            hovermode="x unified"
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
