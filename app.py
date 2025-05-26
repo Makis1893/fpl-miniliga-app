@@ -78,14 +78,6 @@ with tabs[0]:
 
             st.plotly_chart(fig, use_container_width=True)
 
-        # Ladící výpis prvního kola prvního týmu – můžeš zakomentovat po ověření
-        if entries:
-            first_entry_id, first_name = entries[0]
-            first_history = fetch_team_history(first_entry_id)
-            if len(first_history) > 0:
-                st.write(f"Ukázka dat pro tým {first_name} (kolo 1):")
-                st.json(first_history[0])
-
 with tabs[1]:
     if st.button("Zobrazit top 30 bodových výkonů", key="button_top30"):
         entries = fetch_league_data(league_id)
