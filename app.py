@@ -60,7 +60,6 @@ with tabs[0]:
                     hovertemplate='Kolo %{x}<br>Body celkem: %{y}<br>Tým: '+team+'<extra></extra>'
                 ))
 
-            # Přidání tlačítek Hide all / Show all
             fig.update_layout(
                 updatemenus=[
                     dict(
@@ -137,7 +136,11 @@ with tabs[1]:
         df_points = pd.DataFrame(points_per_round)
         df_points.index = range(1, max_rounds + 1)
 
-        df_rankings = df_points.rank(axis=1, method='min', ascending=False).astype(int)
+        # Kumulativní body
+        df_cum_points = df_points.cumsum()
+
+        # Pořadí podle kumulativních bodů (1 = nejlepší)
+        df_rankings = df_cum_points.rank(axis=1, method='min', ascending=False).astype(int)
         max_position = len(df_rankings.columns)
 
         fig = go.Figure()
@@ -152,7 +155,6 @@ with tabs[1]:
                 hovertemplate='Kolo %{x}<br>Pořadí v minilize: %{y}<br>Tým: '+team+'<extra></extra>'
             ))
 
-        # Přidání tlačítek Hide all / Show all
         fig.update_layout(
             updatemenus=[
                 dict(
@@ -169,7 +171,7 @@ with tabs[1]:
                             label="Show all",
                             method="update",
                             args=[{"visible": [True]*max_position},
-                                  {"title": "Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)"}]
+                                  {"title": "Vývoj pořadí v minilize podle kumulativních bodů (Všechny týmy)"}]
                         )
                     ],
                     pad={"r": 10, "t": 10},
@@ -183,7 +185,7 @@ with tabs[1]:
         )
 
         fig.update_layout(
-            title="Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)",
+            title="Vývoj pořadí v minilize podle kumulativních bodů (Všechny týmy)",
             xaxis_title="Kolo",
             yaxis_title="Pořadí v minilize (1 = nejlepší)",
             xaxis=dict(range=[1, 38], dtick=1, tick0=1),
