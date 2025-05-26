@@ -141,4 +141,42 @@ with tabs[3]:
                     ranks += [ranks[-1]] * (max_rounds - len(ranks))
                 df_rankings[name] = ranks
             except Exception as e:
-                st.warning(f"Chyba při načítání dat p
+                st.warning(f"Chyba při načítání dat pro {name}: {e}")
+
+        if not df_rankings.empty:
+            df_rankings.index = range(1, max_rounds + 1)
+
+            fig = go.Figure()
+
+            for team in df_rankings.columns:
+                fig.add_trace(go.Scatter(
+                    x=df_rankings.index,
+                    y=df_rankings[team],
+                    mode='lines+markers',
+                    name=team,
+                    line=dict(width=2),
+                    marker=dict(size=5),
+                    hovertemplate='Kolo %{x}<br>Pořadí: %{y}<br>Tým: '+team+'<extra></extra>'
+                ))
+
+            fig.update_layout(
+                title="Vývoj pořadí v minilize (Všechny týmy)",
+                xaxis_title="Kolo",
+                yaxis_title="Pořadí (čím nižší, tím lepší)",
+                xaxis=dict(range=[1, 38], dtick=1, tick0=1),
+                yaxis=dict(autorange="reversed"),  # Osa y obráceně, aby 1 bylo nahoře
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=1.02,
+                    xanchor="right",
+                    x=1,
+                    xref="paper",
+                    yref="paper",
+                    bgcolor="rgba(0,0,0,0)"
+                ),
+                margin=dict(l=40, r=40, t=60, b=40),
+                hovermode="x unified"
+            )
+
+            st.plotly_chart(fig, use_container_width=True)
