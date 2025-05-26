@@ -100,6 +100,8 @@ with tabs[1]:
         if not df_rankings.empty:
             df_rankings.index = range(1, max_rounds + 1)
 
+            max_position = len(df_rankings.columns)  # počet týmů v minilize
+
             fig = go.Figure()
             for team in df_rankings.columns:
                 fig.add_trace(go.Scatter(
@@ -117,7 +119,7 @@ with tabs[1]:
                 xaxis_title="Kolo",
                 yaxis_title="Pořadí v minilize (čím nižší, tím lepší)",
                 xaxis=dict(range=[1, 38], dtick=1, tick0=1),
-                yaxis=dict(autorange="reversed"),  # 1 nahoře
+                yaxis=dict(range=[1, max_position], autorange="reversed"),  # pevný rozsah osy y, 1 nahoře
                 legend=dict(
                     orientation="h",
                     yanchor="bottom",
