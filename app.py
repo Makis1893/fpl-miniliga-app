@@ -60,6 +60,36 @@ with tabs[0]:
                     hovertemplate='Kolo %{x}<br>Body celkem: %{y}<br>Tým: '+team+'<extra></extra>'
                 ))
 
+            # Přidání tlačítek Hide all / Show all
+            fig.update_layout(
+                updatemenus=[
+                    dict(
+                        type="buttons",
+                        direction="left",
+                        buttons=[
+                            dict(
+                                label="Hide all",
+                                method="update",
+                                args=[{"visible": [False]*len(df.columns)},
+                                      {"title": "Všechny čáry skryty"}]
+                            ),
+                            dict(
+                                label="Show all",
+                                method="update",
+                                args=[{"visible": [True]*len(df.columns)},
+                                      {"title": "Vývoj celkových bodů v minilize (Všechny týmy)"}]
+                            )
+                        ],
+                        pad={"r": 10, "t": 10},
+                        showactive=False,
+                        x=0,
+                        xanchor="left",
+                        y=1.15,
+                        yanchor="top"
+                    )
+                ]
+            )
+
             fig.update_layout(
                 title="Vývoj celkových bodů v minilize (Všechny týmy)",
                 xaxis_title="Kolo",
@@ -108,7 +138,6 @@ with tabs[1]:
         df_points.index = range(1, max_rounds + 1)
 
         df_rankings = df_points.rank(axis=1, method='min', ascending=False).astype(int)
-
         max_position = len(df_rankings.columns)
 
         fig = go.Figure()
@@ -122,6 +151,36 @@ with tabs[1]:
                 marker=dict(size=5),
                 hovertemplate='Kolo %{x}<br>Pořadí v minilize: %{y}<br>Tým: '+team+'<extra></extra>'
             ))
+
+        # Přidání tlačítek Hide all / Show all
+        fig.update_layout(
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    direction="left",
+                    buttons=[
+                        dict(
+                            label="Hide all",
+                            method="update",
+                            args=[{"visible": [False]*max_position},
+                                  {"title": "Všechny čáry skryty"}]
+                        ),
+                        dict(
+                            label="Show all",
+                            method="update",
+                            args=[{"visible": [True]*max_position},
+                                  {"title": "Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)"}]
+                        )
+                    ],
+                    pad={"r": 10, "t": 10},
+                    showactive=False,
+                    x=0,
+                    xanchor="left",
+                    y=1.15,
+                    yanchor="top"
+                )
+            ]
+        )
 
         fig.update_layout(
             title="Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)",
