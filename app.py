@@ -20,19 +20,25 @@ def fetch_league_data(league_id):
 def fetch_team_history(entry_id):
     url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
     response = requests.get(url)
+    return [gw['total_points'] for gw in response.json().get('current', [])]
+
+@st.cache_data
+def fetch_team_history_full(entry_id):
+    url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
+    response = requests.get(url)
     return response.json().get('current', [])
 
 tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů"])
 
 with tabs[0]:
-    if st.button("Zobrazit vývoj bodů"):
+    if st.button("Zobrazit vývoj bodů", key="button_vyvoj"):
         entries = fetch_league_data(league_id)
         df = pd.DataFrame()
 
         for entry_id, name in entries:
             try:
                 display_name = "Podoli-Pistin" if name.lower() == "podoli-pistin" else name
-                points = [gw['total_points'] for gw in fetch_team_history(entry_id)]
+                points = fetch_team_history(entry_id)
                 df[display_name] = points
             except Exception as e:
                 st.warning(f"Chyba při načítání dat pro {name}: {e}")
@@ -80,33 +86,7 @@ with tabs[0]:
             st.plotly_chart(fig, use_container_width=True)
 
 with tabs[1]:
-    if st.button("Zobrazit top 10 bodových výkonů"):
-        entries = fetch_league_data(league_id)
-        performances = []
-
-        for entry_id, name in entries:
-            try:
-                history = fetch_team_history(entry_id)
-                for gw in history:
-                    # gw je dict s klíči jako 'event' (kolo), 'total_points' (body)
-                    # ale v naší funkci jsme si vzali jen total_points, teď použijeme celou historii:
-                    pass
-            except Exception as e:
-                st.warning(f"Chyba při načítání dat pro {name}: {e}")
-
-        # Protože fetch_team_history vrací jen list bodů, musíme upravit, aby vracel celé historie:
-        # Změna fetch_team_history:
-
-@st.cache_data
-def fetch_team_history_full(entry_id):
-    url = f"https://fantasy.premierleague.com/api/entry/{entry_id}/history/"
-    response = requests.get(url)
-    return response.json().get('current', [])
-
-# Použijeme tuto funkci teď správně v druhé záložce:
-
-with tabs[1]:
-    if st.button("Zobrazit top 10 bodových výkonů"):
+    if st.button("Zobrazit top 10 bodových výkonů", key="button_top10"):
         entries = fetch_league_data(league_id)
         performances = []
 
