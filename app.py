@@ -29,6 +29,32 @@ tabs = st.tabs([
     "4️⃣ Aktuální pořadí miniligy"
 ])
 
+def create_hide_show_buttons(num_traces):
+    return [
+        dict(
+            type="buttons",
+            direction="left",
+            buttons=[
+                dict(
+                    label="Hide all",
+                    method="restyle",
+                    args=[{"visible": [False] * num_traces}]
+                ),
+                dict(
+                    label="Show all",
+                    method="restyle",
+                    args=[{"visible": [True] * num_traces}]
+                )
+            ],
+            pad={"r": 10, "t": 10},
+            showactive=False,
+            x=0,
+            xanchor="left",
+            y=1.15,
+            yanchor="top"
+        )
+    ]
+
 with tabs[0]:
     if st.button("Zobrazit vývoj bodů", key="button_vyvoj_bodu"):
         entries = fetch_league_data(league_id)
@@ -60,37 +86,8 @@ with tabs[0]:
                     hovertemplate='Kolo %{x}<br>Body celkem: %{y}<br>Tým: '+team+'<extra></extra>'
                 ))
 
-            # Přidání tlačítek Hide all / Show all
             fig.update_layout(
-                updatemenus=[
-                    dict(
-                        type="buttons",
-                        direction="left",
-                        buttons=[
-                            dict(
-                                label="Hide all",
-                                method="update",
-                                args=[{"visible": [False]*len(df.columns)},
-                                      {"title": "Všechny čáry skryty"}]
-                            ),
-                            dict(
-                                label="Show all",
-                                method="update",
-                                args=[{"visible": [True]*len(df.columns)},
-                                      {"title": "Vývoj celkových bodů v minilize (Všechny týmy)"}]
-                            )
-                        ],
-                        pad={"r": 10, "t": 10},
-                        showactive=False,
-                        x=0,
-                        xanchor="left",
-                        y=1.15,
-                        yanchor="top"
-                    )
-                ]
-            )
-
-            fig.update_layout(
+                updatemenus=create_hide_show_buttons(len(df.columns)),
                 title="Vývoj celkových bodů v minilize (Všechny týmy)",
                 xaxis_title="Kolo",
                 yaxis_title="Celkové body",
@@ -152,37 +149,8 @@ with tabs[1]:
                 hovertemplate='Kolo %{x}<br>Pořadí v minilize: %{y}<br>Tým: '+team+'<extra></extra>'
             ))
 
-        # Přidání tlačítek Hide all / Show all
         fig.update_layout(
-            updatemenus=[
-                dict(
-                    type="buttons",
-                    direction="left",
-                    buttons=[
-                        dict(
-                            label="Hide all",
-                            method="update",
-                            args=[{"visible": [False]*max_position},
-                                  {"title": "Všechny čáry skryty"}]
-                        ),
-                        dict(
-                            label="Show all",
-                            method="update",
-                            args=[{"visible": [True]*max_position},
-                                  {"title": "Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)"}]
-                        )
-                    ],
-                    pad={"r": 10, "t": 10},
-                    showactive=False,
-                    x=0,
-                    xanchor="left",
-                    y=1.15,
-                    yanchor="top"
-                )
-            ]
-        )
-
-        fig.update_layout(
+            updatemenus=create_hide_show_buttons(max_position),
             title="Vývoj pořadí v minilize podle bodů v kole (Všechny týmy)",
             xaxis_title="Kolo",
             yaxis_title="Pořadí v minilize (1 = nejlepší)",
