@@ -22,7 +22,7 @@ def fetch_team_history(entry_id):
     response = requests.get(url)
     return response.json().get('current', [])
 
-tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 10 bodových výkonů", "🏆 Pořadí miniligy"])
+tabs = st.tabs(["📈 Vývoj bodů", "🔥 Top 30 bodových výkonů", "🏆 Pořadí miniligy"])
 
 with tabs[0]:
     if st.button("Zobrazit vývoj bodů", key="button_vyvoj"):
@@ -87,7 +87,7 @@ with tabs[0]:
                 st.json(first_history[0])
 
 with tabs[1]:
-    if st.button("Zobrazit top 10 bodových výkonů", key="button_top10"):
+    if st.button("Zobrazit top 30 bodových výkonů", key="button_top30"):
         entries = fetch_league_data(league_id)
         performances = []
 
@@ -108,11 +108,11 @@ with tabs[1]:
 
         if performances:
             df_perf = pd.DataFrame(performances)
-            top10 = df_perf.sort_values(by="Body", ascending=False).head(10).reset_index(drop=True)
-            top10.index += 1
-            top10.index.name = 'Pořadí'
-            st.subheader("🔥 Top 10 bodových výkonů v rámci jednoho kola")
-            st.table(top10)
+            top30 = df_perf.sort_values(by="Body", ascending=False).head(30).reset_index(drop=True)
+            top30.index += 1
+            top30.index.name = 'Pořadí'
+            st.subheader("🔥 Top 30 bodových výkonů v rámci jednoho kola")
+            st.table(top30)
 
 with tabs[2]:
     if st.button("Zobrazit aktuální pořadí", key="button_poradi"):
