@@ -13,8 +13,7 @@ max_rounds = 38
 def fetch_league_data(lid):
     url = f"https://fantasy.premierleague.com/api/leagues-classic/{lid}/standings/"
     r = requests.get(url); r.raise_for_status()
-    data = r.json()
-    return [(e["entry"], e["entry_name"]) for e in data["standings"]["results"]]
+    return [(e["entry"], e["entry_name"]) for e in r.json()["standings"]["results"]]
 
 @st.cache_data
 def fetch_team_history(eid):
@@ -22,34 +21,33 @@ def fetch_team_history(eid):
     r = requests.get(url); r.raise_for_status()
     return r.json().get("current", [])
 
-# Načti všechny týmy
+# Načti týmy
 entries = fetch_league_data(league_id)
 
-# Připrav DataFrame kumulativních bodů (total_points) pro Tab 1
-cum_df = pd.DataFrame(index=range(1, max_rounds+1))
-# Připrav DataFrame bodů v kolech (event_points) pro Tab 6
+# --- připrav dataframes ---
+# 1) event_points pro Tab3 a Tab6
 points_df = pd.DataFrame(index=range(1, max_rounds+1))
-# Připrav DataFrame hodnoty pro Tab 5
-value_df = pd.DataFrame(index=range(1, max_rounds+1))
+# 2) total_points (kumulativní) pro Tab1
+cum_df    = pd.DataFrame(index=range(1, max_rounds+1))
+# 3) value_df pro Tab5
+value_df  = pd.DataFrame(index=range(1, max_rounds+1))
 
 for eid, name in entries:
     hist = fetch_team_history(eid)
-    # total_points je kumulativní
-    total = [gw.get("total_points", 0) for gw in hist]
-    total += [total[-1] if total else 0] * (max_rounds - len(total))
-    cum_df[name] = total
-
-    # event_points pro scatter
-    pts = [gw.get("event_points", 0) for gw in hist]
-    pts += [0] * (max_rounds - len(pts))
-    points_df[name] = pts
-
-    # value v pencích -> M£ 
+    # event_points
+    ev = [gw.get("event_points", 0) for gw in hist]
+    ev += [0] * (max_rounds - len(ev))
+    points_df[name] = ev
+    # total_points
+    tot = [gw.get("total_points", 0) for gw in hist]
+    tot += [tot[-1] if tot else 0] * (max_rounds - len(tot))
+    cum_df[name] = tot
+    # value
     val = [gw.get("value", 0) for gw in hist]
     val += [val[-1] if val else 0] * (max_rounds - len(val))
-    value_df[name] = [v/10 for v in val]
+    value_df[name] = [v/10 for v in val]  # na M£
 
-# Utility pro tlačítka Hide/Show
+# utilka
 def add_hide_show(fig, n, title):
     fig.update_layout(
         updatemenus=[dict(
@@ -74,10 +72,10 @@ tabs = st.tabs([
     "3️⃣ Top 30 výkonů",
     "4️⃣ Aktuální pořadí",
     "5️⃣ Vývoj hodnoty",
-    "6️⃣ Scatter bodů v kolech"
+    "6️⃣ Scatter bodů"
 ])
 
-# Tab 1: Kumulativní body (total_points)
+# Tab1: kumulativní total_points
 with tabs[0]:
     fig = go.Figure()
     for team in cum_df.columns:
@@ -94,7 +92,7 @@ with tabs[0]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tab 2: Vývoj pořadí podle kumulativních bodů
+# Tab2: vývoj pořadí
 with tabs[1]:
     ranks = cum_df.rank(axis=1, method="min", ascending=False).astype(int)
     fig = go.Figure()
@@ -113,30 +111,33 @@ with tabs[1]:
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tab 3: Top 30 nejlepších bodových výkonů v jednom kole
+# Tab3: Top30 z points_df
 with tabs[2]:
-    perf = []
-    for eid, name in entries:
-        hist = fetch_team_history(eid)
-        for gw in hist:
-            pts = gw.get("event_points", 0)
-            perf.append({"Tým": name, "Kolo": gw.get("event"), "Body": pts})
-    dfp = pd.DataFrame(perf).sort_values("Body", ascending=False).head(30).reset_index(drop=True)
-    dfp.index += 1; dfp.index.name = "Pořadí"
-    st.table(dfp)
+    recs = []
+    for event in points_df.index:
+        for team in points_df.columns:
+            recs.append({
+                "Tým": team,
+                "Kolo": event,
+                "Body": points_df.at[event, team]
+            })
+    df_top = pd.DataFrame(recs).sort_values("Body", ascending=False).head(30).reset_index(drop=True)
+    df_top.index += 1; df_top.index.name = "Pořadí"
+    st.table(df_top)
 
-# Tab 4: Aktuální pořadí miniligy
+# Tab4: aktuální pořadí
 with tabs[3]:
-    final = []
-    for eid, name in entries:
-        hist = fetch_team_history(eid)
-        total = hist[-1].get("total_points", 0) if hist else 0
-        final.append({"Tým": name, "Body celkem": total})
-    dff = pd.DataFrame(final).sort_values("Body celkem", ascending=False).reset_index(drop=True)
-    dff.index += 1; dff.index.name = "Pořadí"
-    st.table(dff)
+    recs = []
+    for team in cum_df.columns:
+        recs.append({
+            "Tým": team,
+            "Body celkem": cum_df.at[max_rounds, team]
+        })
+    df_now = pd.DataFrame(recs).sort_values("Body celkem", ascending=False).reset_index(drop=True)
+    df_now.index += 1; df_now.index.name = "Pořadí"
+    st.table(df_now)
 
-# Tab 5: Vývoj hodnoty týmu
+# Tab5: vývoj hodnoty
 with tabs[4]:
     fig = go.Figure()
     for team in value_df.columns:
@@ -146,13 +147,14 @@ with tabs[4]:
         ))
     add_hide_show(fig, len(value_df.columns), "Vývoj hodnoty")
     fig.update_layout(
-        title="Vývoj hodnoty týmu (M£)", xaxis_title="Kolo", yaxis_title="Hodnota [M£]",
+        title="Vývoj hodnoty týmu (M£)",
+        xaxis_title="Kolo", yaxis_title="Hodnota [M£]",
         xaxis=dict(tickmode="linear", dtick=1, range=[1, max_rounds]),
         hovermode="x unified"
     )
     st.plotly_chart(fig, use_container_width=True)
 
-# Tab 6: Scatter bodů v jednotlivých kolech (event_points)
+# Tab6: scatter event_points
 with tabs[5]:
     fig = go.Figure()
     for team in points_df.columns:
@@ -162,9 +164,9 @@ with tabs[5]:
             hovertemplate='Tým: %{legendgroup}<br>Kolo %{x}<br>Body %{y}<extra></extra>',
             legendgroup=team
         ))
-    add_hide_show(fig, len(points_df.columns), "Scatter bodů v kolech")
+    add_hide_show(fig, len(points_df.columns), "Scatter bodů")
     fig.update_layout(
-        title="Bodový scatter – body týmů v jednotlivých kolech",
+        title="Bodový scatter – body týmů v kolech",
         xaxis_title="Kolo", yaxis_title="Body",
         xaxis=dict(tickmode="linear", dtick=1, range=[1, max_rounds]),
         hovermode="closest"
